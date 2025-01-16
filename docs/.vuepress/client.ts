@@ -1,5 +1,4 @@
 import { defineClientConfig } from 'vuepress/client'
-import { SpeedInsights } from "@vercel/speed-insights/vue"
 // import RepoCard from 'vuepress-theme-plume/features/RepoCard.vue'
 // import NpmBadge from 'vuepress-theme-plume/features/NpmBadge.vue'
 // import NpmBadgeGroup from 'vuepress-theme-plume/features/NpmBadgeGroup.vue'
