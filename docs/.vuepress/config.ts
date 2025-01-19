@@ -41,7 +41,7 @@ export default defineUserConfig({
     // },
 
     /* 博客文章页面链接前缀 */
-    article: '/article/',
+    // article: '/article/',
 
     /**
      * 编译缓存，加快编译速度
