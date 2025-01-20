@@ -14,11 +14,11 @@ config:
       text: Talk is cheap. Show me the code.
       actions:
         -
-          text: 我的博客
-          link: /blog/
+          text: 我的知识库
+          link: /KB/
           theme: brand
         -
-          text: Github
+          text: Github ->
           link: https://github.com/Lane0218/blog_new
           theme: alt
 ---
