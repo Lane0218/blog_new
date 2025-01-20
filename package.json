@@ -25,6 +25,7 @@
     "typescript": "^5.7.2"
   },
   "dependencies": {
+    "@iconify/json": "^2.2.297",
     "@vercel/speed-insights": "^1.1.0"
   }
 }
