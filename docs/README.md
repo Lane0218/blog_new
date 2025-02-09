@@ -11,8 +11,12 @@ config:
     hero:
       name: Hi, I'm Lane
       tagline: Welcome to my blog
-      text: Talk is cheap. Show me the code.
+      text: 探索未知，解码未来
       actions:
+        -
+          text: 我的博客
+          link: /blog/
+          theme: brand
         -
           text: 我的知识库
           link: /KB/
