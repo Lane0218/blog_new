@@ -4,8 +4,10 @@ createTime: 2025/03/01 23:54:44
 permalink: /article/2m93m79l/
 ---
 
-本文详细记录了我在WSL环境下编译LLVM 20.1.0源码并实现代码覆盖率统计的过程中踩过的坑。
+本文详细记录了我在WSL环境下编译LLVM 20.1.0源码并实现代码覆盖率统计的过程中踩过的坑，还包括了集成GTest和覆盖率分析的实战内容。
 <!-- more -->
+
+<LinkCard icon="https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/csdn.png" title="本文同步发表于我的CSDN博客" href="https://blog.csdn.net/Lane0218/article/details/145956110" />
 
 ## 环境准备
 本次实验基于WSL（Windows Subsystem for Linux）环境，推荐使用Ubuntu 22.04发行版。核心依赖包括：
@@ -82,89 +84,255 @@ source ~/.bashrc
 注意一开始我把LLVM_PATH写成了PATH，导致与上面的PATH重名，整个命令行都无法正确使用
 <img src="https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/20250301213536.png" alt="环境变量配置" width="525">
 
-## 覆盖率统计实验
-### 测试代码（main.c）
-```c
-#include <stdio.h>
+## GTest集成与覆盖率分析实战
+### 实战项目概览
+```bash
+.
+├── my_lib.cpp
+├── my_lib.h
+├── run_coverage.sh
+└── test_my_lib.cpp
 
-int main() {
-    int loop = 10;
-    for (int idx = 0; idx < loop; idx++)
-        printf("%s line %d, %d\n", __func__, __LINE__, idx);
+0 directories, 4 files
+```
+### 测试库设计与实现
+本项目构建了数学运算基础库`my_lib`用于测试，包含四类核心函数：整数加法运算、整数减法运算、质数判断、非负整数阶乘。
+::: code-tabs
+@tab my_lib.h
+```cpp:collapsed-lines
+// my_lib.h
+// Author: Lane
+// Date: 2025-03-03
 
-    return loop > 0 ? printf("loop>0\n") : printf("loop<=0\n");
+#ifndef MY_LIB_H
+#define MY_LIB_H
+
+// 数学运算基础库
+namespace math
+{
+
+// 计算两个整数的和
+int add(int a, int b);
+
+// 计算两个整数的差（a - b）
+int subtract(int a, int b);
+
+// 判断数字是否为质数
+bool is_prime(int number);
+
+// 计算非负整数的阶乘（返回0表示无效输入）
+unsigned long long factorial(int n);
+
+} // namespace math
+
+#endif // MY_LIB_H
+```
+@tab my_lib.cpp
+```cpp:collapsed-lines
+// my_lib.cpp
+// Author: Lane
+// Date: 2025-03-03
+
+#include "my_lib.h"
+
+namespace math
+{
+
+int add(int a, int b) { return a + b; }
+
+int subtract(int a, int b) { return a - b; }
+
+bool is_prime(int number)
+{
+    if (number <= 1)
+        return false;
+    if (number == 2)
+        return true;
+    if (number % 2 == 0)
+        return false;
+
+    for (int i = 3; i * i <= number; i += 2)
+    {
+        if (number % i == 0)
+            return false;
+    }
+    return true;
+}
+
+unsigned long long factorial(int n)
+{
+    if (n < 0)
+        return 0;
+    unsigned long long result = 1;
+    for (int i = 2; i <= n; ++i)
+    {
+        result *= i;
+    }
+    return result;
+}
+
+} // namespace math
+```
+:::
+
+### 测试用例开发策略
+采用GTest框架编写测试集，对其进行白盒测试。
+```cpp:collapsed-lines
+// test_my_lib.cpp
+// Author: Lane
+// Date: 2025-03-03
+
+#include <iostream>
+
+#include "my_lib.h"
+#include "gtest/gtest.h"
+
+using namespace std;
+
+// 加法基础测试
+TEST(MathTest, AddPositiveNumbers)
+{
+    EXPECT_EQ(math::add(2, 3), 5); // 覆盖add函数
+}
+
+// 减法函数全测试
+TEST(MathTest, SubtractNormalCase)
+{
+    EXPECT_EQ(math::subtract(5, 3), 2); // 覆盖subtract函数（第12行）
+}
+
+TEST(MathTest, SubtractNegativeResult)
+{
+    EXPECT_EQ(math::subtract(3, 5), -2); // 覆盖负数结果分支
+}
+
+// 质数判断全分支覆盖
+TEST(MathTest, PrimeEvenNumber)
+{
+    EXPECT_FALSE(math::is_prime(4)); // 触发number%2==0分支（第20行）
+}
+
+TEST(MathTest, PrimeLargeOddComposite)
+{
+    EXPECT_FALSE(math::is_prime(9)); // 进入循环并发现因子（i=3时9%3==0）
+}
+
+TEST(MathTest, PrimeLargeOddPrime)
+{
+    EXPECT_TRUE(math::is_prime(17)); // 完整执行循环后返回true（第23-28行）
+}
+
+// 阶乘全路径测试
+TEST(MathTest, FactorialZero)
+{
+    EXPECT_EQ(math::factorial(0), 1); // 覆盖n=0路径（第35行未触发，直接返回1）
+}
+
+TEST(MathTest, FactorialPositiveNumber)
+{
+    EXPECT_EQ(math::factorial(5), 120); // 覆盖循环计算（第36-39行）
+}
+
+TEST(MathTest, FactorialEdgeCase1)
+{
+    EXPECT_EQ(math::factorial(1), 1); // 覆盖i=2未执行的情况
+}
+
+int main(int argc, char **argv)
+{
+    testing::InitGoogleTest(&argc, argv);
+    return RUN_ALL_TESTS();
 }
 ```
 
-### 覆盖率工作流
+### 覆盖率分析系统构建
+接下来编译和运行代码，生成覆盖率分析报告，因为指令比较复杂，所以我写了一个运行在Linux下的自动化测试脚本`run_coverage.sh`
+```bash:collapsed-lines
+# run_coverage.sh
+# Author: Lane
+# Date: 2025-03-03
+
+#!/bin/bash
+
+# ---------- 参数配置 ----------
+
+# ------- 需要修改的部分 -------
+TARGET_EXEC="test_my_lib"  # 生成的可执行文件名
+SOURCE_FILES="my_lib.cpp test_my_lib.cpp"  # 需要编译的源文件
+# ------- 需要修改的部分 -------
+
+CLANG_FLAGS="-std=c++17 -fprofile-instr-generate -fcoverage-mapping"  # 覆盖率相关编译参数
+GTEST_LIBS="-lgtest -lgtest_main -pthread"  # GTest依赖库
+REPORT_DIR="coverage_report"  # HTML报告输出目录
+
+# ---------- 清理旧文件 ----------
+cleanup() {
+    echo "[1/5] 清理旧构建文件..."
+    rm -rf "$TARGET_EXEC" *.profraw *.profdata *.gcda *.gcno "$REPORT_DIR"
+}
+
+# ---------- 编译代码 ----------
+compile() {
+    echo "[2/5] 使用clang++编译代码..."
+    clang++ $CLANG_FLAGS $SOURCE_FILES -o $TARGET_EXEC $GTEST_LIBS || {
+        echo "编译失败!"
+        exit 1
+    }
+}
+
+# ---------- 运行测试生成覆盖率数据 ----------
+run_tests() {
+    echo "[3/5] 运行测试生成覆盖率数据..."
+    LLVM_PROFILE_FILE="$TARGET_EXEC.profraw" ./$TARGET_EXEC || {
+        echo "测试执行失败!"
+        exit 1
+    }
+}
+
+# ---------- 合并覆盖率数据 ----------
+merge_coverage() {
+    echo "[4/5] 处理覆盖率数据..."
+    llvm-profdata merge -sparse "$TARGET_EXEC.profraw" -o "$TARGET_EXEC.profdata" || {
+        echo "覆盖率数据合并失败!"
+        exit 1
+    }
+}
+
+# ---------- 生成报告 ----------
+generate_reports() {
+    echo "[5/5] 生成覆盖率报告..."
+    # 生成终端文本报告
+    llvm-cov report ./$TARGET_EXEC -instr-profile="$TARGET_EXEC.profdata" > coverage_summary.txt
+    echo "文本报告已保存至: coverage_summary.txt"
+
+    # 生成HTML可视化报告
+    mkdir -p "$REPORT_DIR"
+    llvm-cov show ./$TARGET_EXEC -instr-profile="$TARGET_EXEC.profdata" \
+        -format=html -output-dir="$REPORT_DIR" > /dev/null
+    echo "HTML报告已生成至: file://$(realpath $REPORT_DIR)/index.html"
+}
+
+# ---------- 主流程 ----------
+cleanup
+compile
+run_tests
+merge_coverage
+generate_reports
+```
+
+### 覆盖率结果验证
+执行测试脚本后生成GTest和覆盖率测试报告：
 ```bash
-# 编译插桩版本
-clang -fprofile-instr-generate -fcoverage-mapping main.c -o main
+# 赋予脚本执行权限
+chmod +x run_coverage.sh
 
-# 生成执行数据
-LLVM_PROFILE_FILE="main.profraw" ./main
-
-# 数据合并处理
-llvm-profdata merge -sparse main.profraw -o main.profdata
-
-# 报告生成
-llvm-cov show ./main -instr-profile=main.profdata  # 文本模式
-llvm-cov report ./main -instr-profile=main.profdata  # 摘要模式
+# 执行完整流程
+./run_coverage.sh
 ```
-程序编译、运行和生成覆盖率报告结果如下图所示
-<img src="https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/PixPin_2025-03-01_21-00-06.png" alt="覆盖率报告" width="450">
+程序运行结果截图如下：
 
-## Makefile自动化
-上述编译、运行和生成覆盖率报告的过程太过繁琐，所以我写了一个Makefile文件，从而实现自动化：
-+ 完整流程（编译→运行→生成HTML报告） `make`
-+ 单独生成HTML报告（需先执行过`make`） `make report`
-+ 查看文本格式报告 `make show`
-+ 清理构建产物 `make clean`
+<img src="https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/20250303121335.png" alt="image.png" width="500">
 
-```makefile
-# 编译器配置
-CC := clang
-CFLAGS := -g -fprofile-instr-generate -fcoverage-mapping
-LLVM_PROFDATA := llvm-profdata
-LLVM_COV := llvm-cov
-
-# 文件路径配置
-TARGET := main
-PROFRAW := main.profraw
-PROFDATA := main.profdata
-COV_DIR := coverage_report 
-
-.PHONY: all compile run merge report clean
-
-all: compile run report
-
-# 编译阶段
-compile: $(TARGET)
-
-# 编译规则
-$(TARGET): main.c
-	$(CC) $(CFLAGS) $< -o $@
-
-# 运行生成profraw
-run: compile
-	@echo "Generating coverage data..."
-	@LLVM_PROFILE_FILE="$(PROFRAW)" ./$(TARGET) || (echo "Execution failed"; exit 1)
-
-# 合并profdata
-merge: run
-	$(LLVM_PROFDATA) merge -sparse $(PROFRAW) -o $(PROFDATA)
-
-# 生成HTML报告
-report: merge
-	@mkdir -p $(COV_DIR)
-	$(LLVM_COV) show ./$(TARGET) -instr-profile=$(PROFDATA) --format=html -output-dir=$(COV_DIR)
-	@echo "\nHTML report generated at file://$(COV_DIR)/index.html"
-
-# 文本报告展示
-show: merge
-	$(LLVM_COV) show ./$(TARGET) -instr-profile=$(PROFDATA)
-
-# 清理生成文件
-clean:
-	rm -rf $(TARGET) $(PROFRAW) $(PROFDATA) $(COV_DIR) *.dSYM
-```
+在浏览器中打开index.html，可以看到覆盖率分析报告，以及具体的运行次数统计
+<img src="https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/20250303121427.png" alt="image.png" width="500">
+<img src="https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/20250303121505.png" alt="image.png" width="400">
