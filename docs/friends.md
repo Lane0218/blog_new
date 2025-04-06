@@ -19,4 +19,9 @@ list:
     link: http://www.shininglewis.top/
     avatar: https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/202501201023330.png
     desc: 千般荒凉，以此为梦；万里蹀躞，以此为归。
+  -
+    name: Abnerhexu's Blog
+    link: https://hexu.shahe.org/
+    avatar: https://laneljc-1321736255.cos.ap-nanjing.myqcloud.com/pic/9193821.jpg
+    desc: 涉水阔波出四江，山高峻险势难量。 有识乾坤物堪大，仍怜世间草木青。
 ---
